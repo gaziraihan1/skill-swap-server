@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -50,6 +50,7 @@ const run = async () => {
     const db = client.db("skillswap");
     const usersCollection = db.collection("users");
     const offersCollection = db.collection("offers");
+    const requestsCollection = db.collection("requests");
 
 
 
@@ -124,6 +125,22 @@ app.get("/offers", async (req, res) => {
     res.status(500).send({ error: "Failed to fetch offers" });
   }
 });
+app.get("/offers/:id", async(req, res) => {
+  const {id} = req.params;
+  const result = await offersCollection.findOne({_id: new ObjectId(id)});
+  res.send(result)
+})
+
+app.patch("/offers", async(req, res) => {
+  const userEmail = req.query.userEmail;
+  const updateData = req.body;
+
+  const result = await offersCollection.updateMany(
+    {userEmail},
+    {$set: updateData});
+
+    res.send(result)
+})
 
 
 
@@ -143,6 +160,39 @@ app.get("/offers-collection", async (req, res) => {
 
   res.send({total, offers: result})
 });
+
+app.post("/swap-requests", async (req, res) => {
+  const request = req.body;
+
+  const existing = await requestsCollection.findOne({
+    offerId: request.offerId,
+    senderEmail: request.senderEmail,
+  });
+
+  if (existing) {
+    return res.status(409).send({ message: "You already sent a request for this offer" });
+  }
+
+  request.status = "pending";
+  request.createdAt = new Date();
+
+  const result = await requestsCollection.insertOne(request);
+  res.send({ message: "Swap request sent", insertedId: result.insertedId });
+});
+
+
+
+app.get("/requests/by-user/:email", async (req, res) => {
+  const email = req.params.email;
+  const offerId = req.query.offerId;
+  const existing = await requestsCollection.findOne({
+    offerId,
+    requesterEmail: email,
+  });
+
+  res.send({ requested: !!existing });
+});
+
 
 
 
