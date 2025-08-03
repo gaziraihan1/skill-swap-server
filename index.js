@@ -49,6 +49,7 @@ const run = async () => {
     await client.connect();
     const db = client.db("skillswap");
     const usersCollection = db.collection("users");
+    const offersCollection = db.collection("offers");
 
 
 
@@ -100,6 +101,28 @@ app.put('/users/:email', async (req, res) => {
 
   res.send(result);
 });
+
+app.post("/offers", async (req, res) => {
+  try {
+    const offer = req.body;
+    const result = await offersCollection.insertOne(offer);
+    res.send(result);
+  } catch (error) {
+    console.error("Error adding offer:", error);
+    res.status(500).send({ error: "Failed to add offer" });
+  }
+})
+
+app.get("/offers", async(req, res) => {
+  const email = req.query.email;
+  try {
+    const offers = await offersCollection.find({ email: email }).toArray();
+    res.send(offers);
+  } catch (error) {
+    console.error("Error fetching offers:", error);
+    res.status(500).send({ error: "Failed to fetch offers" });
+  }
+})
 
 
     await client.db("admin").command({ ping: 1 });
