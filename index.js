@@ -113,16 +113,37 @@ app.post("/offers", async (req, res) => {
   }
 })
 
-app.get("/offers", async(req, res) => {
-  const email = req.query.email;
+app.get("/offers", async (req, res) => {
+  const userEmail = req.query.userEmail; 
   try {
-    const offers = await offersCollection.find({ email: email }).toArray();
+    const query = userEmail ? { userEmail } : {};
+    const offers = await offersCollection.find(query).toArray();
     res.send(offers);
   } catch (error) {
     console.error("Error fetching offers:", error);
     res.status(500).send({ error: "Failed to fetch offers" });
   }
-})
+});
+
+
+
+app.get("/offers-collection", async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 6;
+  const search = req.query.search || '';
+  const skill = req.query.skill || '';
+
+  const query = {
+    title: {$regex: search, $options: 'i'},
+    ...(skill && {skill})
+  }
+
+  const total = await offersCollection.countDocuments(query);
+  const result = await offersCollection.find(query).skip((page - 1) * limit).limit(limit).sort({createdAt: -1}).toArray();
+
+  res.send({total, offers: result})
+});
+
 
 
     await client.db("admin").command({ ping: 1 });
