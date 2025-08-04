@@ -51,6 +51,7 @@ const run = async () => {
     const usersCollection = db.collection("users");
     const offersCollection = db.collection("offers");
     const requestsCollection = db.collection("requests");
+    const feedbackCollection = db.collection("feedbacks")
 
 
 
@@ -228,6 +229,60 @@ app.patch('/swap-requests/:id', async (req, res) => {
   );
 
   res.send(result);
+});
+
+app.get("/swaps/active/:email", async (req, res) => {
+  const email = req.params.email;
+  const swaps = await requestsCollection.find({
+    status: "accepted",
+    $or: [{ senderEmail: email }, { receiverEmail: email }],
+  }).toArray();
+  res.send(swaps);
+});
+
+app.get("/swaps/history/:email", async (req, res) => {
+  const email = req.params.email;
+  const history = await requestsCollection.find({
+    status: "completed",
+    $or: [{ senderEmail: email }, { receiverEmail: email }],
+  }).toArray();
+  res.send(history);
+});
+
+app.patch("/requests/complete/:id", async (req, res) => {
+  const id = req.params.id;
+  const request = await requestsCollection.findOne({ _id: new ObjectId(id) });
+
+  const result = await requestsCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status: "completed" } }
+  );
+
+  await offersCollection.updateOne(
+    { _id: new ObjectId(request.offer._id) },
+    { $set: { completed: true } }
+  );
+
+  res.send(result);
+});
+
+
+app.post("/feedback", async (req, res) => {
+  try {
+    const feedback = req.body;
+
+    if (!feedback?.userEmail || !feedback?.message) {
+      return res.status(400).send({ error: "Missing required fields." });
+    }
+
+    feedback.createdAt = new Date();
+
+    const result = await feedbackCollection.insertOne(feedback);
+    res.send(result);
+  } catch (error) {
+    console.error("Error submitting feedback:", error);
+    res.status(500).send({ error: "Internal server error" });
+  }
 });
 
 
