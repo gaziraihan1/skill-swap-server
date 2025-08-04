@@ -193,6 +193,43 @@ app.get("/requests/by-user/:email", async (req, res) => {
   res.send({ requested: !!existing });
 });
 
+app.get('/swap-requests', async (req, res) => {
+  const email = req.query.email;
+
+  if (!email) {
+    return res.status(400).send({ message: 'Email is required' });
+  }
+
+  const requests = await requestsCollection
+    .find({
+      $or: [
+        { senderEmail: email },
+        { receiverEmail: email }
+      ]
+    })
+    .sort({ createdAt: -1 })
+    .toArray();
+
+  res.send(requests);
+});
+
+app.patch('/swap-requests/:id', async (req, res) => {
+  const requestId = req.params.id;
+  const { status } = req.body;
+
+  const allowedStatuses = ['pending', 'accepted', 'rejected'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).send({ message: 'Invalid status value' });
+  }
+
+  const result = await requestsCollection.updateOne(
+    { _id: new ObjectId(requestId) },
+    { $set: { status } }
+  );
+
+  res.send(result);
+});
+
 
 
 
