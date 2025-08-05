@@ -271,7 +271,7 @@ const run = async () => {
       try {
         const feedback = req.body;
 
-        if (!feedback?.feedbackUser || !feedback?.message) {
+        if (!feedback?.userEmail || !feedback?.message) {
           return res.status(400).send({ error: "Missing required fields." });
         }
 
@@ -285,12 +285,34 @@ const run = async () => {
       }
     });
 
+
+app.get('/feedbacks', async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 6;
+  const skip = (page - 1) * limit;
+
+  try {
+    const totalCount = await feedbackCollection.countDocuments();
+    const feedbacks = await feedbackCollection
+      .find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    res.send({ feedbacks, totalCount });
+  } catch (err) {
+    res.status(500).send({ message: 'Failed to load feedbacks', error: err });
+  }
+});
+
+
     app.get("/feedback/user/:email", async (req, res) => {
       const email = req.params.email;
 
       try {
         const feedbacks = await feedbackCollection
-          .find({ feedbackUser: email })
+          .find({ userEmail: email })
           .sort({ createdAt: -1 }) 
           .toArray();
 
@@ -407,6 +429,32 @@ const run = async () => {
 
       res.send(result);
     });
+
+    app.get('/admin/analytics', async (req, res) => {
+  try {
+    const totalUsers = await usersCollection.countDocuments();
+    const totalOffers = await offersCollection.countDocuments();
+    const totalCompletedSwaps = await requestsCollection.countDocuments({
+      status: 'completed',
+    });
+
+    const topSkills = await offersCollection.aggregate([
+      { $group: { _id: '$skill', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 },
+    ]).toArray();
+
+    res.send({
+      totalUsers,
+      totalOffers,
+      totalCompletedSwaps,
+      topSkills,
+    });
+  } catch (err) {
+    console.error('Analytics fetch failed:', err);
+    res.status(500).send({ error: 'Failed to fetch analytics data' });
+  }
+});
 
     await client.db("admin").command({ ping: 1 });
     console.log(
