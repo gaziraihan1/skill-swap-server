@@ -22,26 +22,23 @@ var admin = require("firebase-admin");
 var serviceAccount = require("./firebase-admin-sdk.json");
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
 
-
-const verifyToken = async(req, res, next) => {
+const verifyToken = async (req, res, next) => {
   const authHeader = req.headers?.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).send({ message: "Unauthorized access" });
   }
 
   const token = authHeader.split(" ")[1];
-  try{
+  try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.user = decoded;
     next();
+  } catch (error) {
+    return res.status(403).send({ message: "Forbidden access" });
   }
-  catch(error) {
-    return res.status(403).send({message: "Forbidden access"})
-  }
-  
 };
 
 const run = async () => {
@@ -51,13 +48,11 @@ const run = async () => {
     const usersCollection = db.collection("users");
     const offersCollection = db.collection("offers");
     const requestsCollection = db.collection("requests");
-    const feedbackCollection = db.collection("feedbacks")
+    const feedbackCollection = db.collection("feedbacks");
+    const messagesCollection = db.collection("messages");
 
-
-
-    app.post("/users",  async (req, res) => {
+    app.post("/users", async (req, res) => {
       const user = req.body;
-
 
       const existing = await usersCollection.findOne({ email: user.email });
 
@@ -67,226 +62,351 @@ const run = async () => {
 
       const result = await usersCollection.insertOne(user);
 
-      
-      res.send({ insertedId: result.insertedId});
+      res.send({ insertedId: result.insertedId });
     });
-    app.get("/users",async(req, res) => {
+    app.get("/users", async (req, res) => {
       const result = await usersCollection.find().toArray();
-      res.send(result)
-    })
+      res.send(result);
+    });
 
-app.get('/users/role/:email',verifyToken, async (req, res) => {
-  const email = req.params.email;
-  const user = await usersCollection.findOne({ email });
+    app.get("/users/role/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email });
 
-  if (!user) return res.status(404).send({ message: 'User not found' });
+      if (!user) return res.status(404).send({ message: "User not found" });
 
-  res.send({ role: user.role });
-});
+      res.send({ role: user.role });
+    });
 
-app.get("/users/:email", async(req, res) => {
-  const email = req.params.email;
-  
-  const user = await usersCollection.findOne({email});
-  res.send(user);
-})
-app.put('/users/:email', async (req, res) => {
-  const email = req.params.email;
-  const updatedProfile = req.body;
-  delete updatedProfile._id;
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
 
-  const result = await usersCollection.updateOne(
-    { email },
-    { $set: updatedProfile },
-    { upsert: true }
-  );
+      const user = await usersCollection.findOne({ email });
+      res.send(user);
+    });
+    app.put("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const updatedProfile = req.body;
+      delete updatedProfile._id;
 
-  res.send(result);
-});
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: updatedProfile },
+        { upsert: true }
+      );
 
-app.post("/offers", async (req, res) => {
-  try {
-    const offer = req.body;
-    const result = await offersCollection.insertOne(offer);
-    res.send(result);
-  } catch (error) {
-    console.error("Error adding offer:", error);
-    res.status(500).send({ error: "Failed to add offer" });
-  }
-})
+      res.send(result);
+    });
 
-app.get("/offers", async (req, res) => {
-  const userEmail = req.query.userEmail; 
-  try {
-    const query = userEmail ? { userEmail } : {};
-    const offers = await offersCollection.find(query).toArray();
-    res.send(offers);
-  } catch (error) {
-    console.error("Error fetching offers:", error);
-    res.status(500).send({ error: "Failed to fetch offers" });
-  }
-});
-app.get("/offers/:id", async(req, res) => {
-  const {id} = req.params;
-  const result = await offersCollection.findOne({_id: new ObjectId(id)});
-  res.send(result)
-})
+    app.post("/offers", async (req, res) => {
+      try {
+        const offer = req.body;
+        const result = await offersCollection.insertOne(offer);
+        res.send(result);
+      } catch (error) {
+        console.error("Error adding offer:", error);
+        res.status(500).send({ error: "Failed to add offer" });
+      }
+    });
 
-app.patch("/offers", async(req, res) => {
-  const userEmail = req.query.userEmail;
-  const updateData = req.body;
+    app.get("/offers", async (req, res) => {
+      const userEmail = req.query.userEmail;
+      try {
+        const query = userEmail ? { userEmail } : {};
+        const offers = await offersCollection.find(query).toArray();
+        res.send(offers);
+      } catch (error) {
+        console.error("Error fetching offers:", error);
+        res.status(500).send({ error: "Failed to fetch offers" });
+      }
+    });
+    app.get("/offers/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await offersCollection.findOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
 
-  const result = await offersCollection.updateMany(
-    {userEmail},
-    {$set: updateData});
+    app.patch("/offers", async (req, res) => {
+      const userEmail = req.query.userEmail;
+      const updateData = req.body;
 
-    res.send(result)
-})
+      const result = await offersCollection.updateMany(
+        { userEmail },
+        { $set: updateData }
+      );
 
+      res.send(result);
+    });
 
+    app.get("/offers-collection", async (req, res) => {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 6;
+      const search = req.query.search || "";
+      const skill = req.query.skill || "";
 
-app.get("/offers-collection", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 6;
-  const search = req.query.search || '';
-  const skill = req.query.skill || '';
+      const query = {
+        title: { $regex: search, $options: "i" },
+        ...(skill && { skill }),
+      };
 
-  const query = {
-    title: {$regex: search, $options: 'i'},
-    ...(skill && {skill})
-  }
+      const total = await offersCollection.countDocuments(query);
+      const result = await offersCollection
+        .find(query)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .toArray();
 
-  const total = await offersCollection.countDocuments(query);
-  const result = await offersCollection.find(query).skip((page - 1) * limit).limit(limit).sort({createdAt: -1}).toArray();
+      res.send({ total, offers: result });
+    });
 
-  res.send({total, offers: result})
-});
+    app.post("/swap-requests", async (req, res) => {
+      const request = req.body;
 
-app.post("/swap-requests", async (req, res) => {
-  const request = req.body;
+      const existing = await requestsCollection.findOne({
+        offerId: request.offerId,
+        senderEmail: request.senderEmail,
+      });
 
-  const existing = await requestsCollection.findOne({
-    offerId: request.offerId,
-    senderEmail: request.senderEmail,
-  });
+      if (existing) {
+        return res
+          .status(409)
+          .send({ message: "You already sent a request for this offer" });
+      }
 
-  if (existing) {
-    return res.status(409).send({ message: "You already sent a request for this offer" });
-  }
+      request.status = "pending";
+      request.createdAt = new Date();
 
-  request.status = "pending";
-  request.createdAt = new Date();
+      const result = await requestsCollection.insertOne(request);
+      res.send({ message: "Swap request sent", insertedId: result.insertedId });
+    });
 
-  const result = await requestsCollection.insertOne(request);
-  res.send({ message: "Swap request sent", insertedId: result.insertedId });
-});
+    app.get("/requests/by-user/:email", async (req, res) => {
+      const email = req.params.email;
+      const offerId = req.query.offerId;
+      const existing = await requestsCollection.findOne({
+        offerId,
+        requesterEmail: email,
+      });
 
+      res.send({ requested: !!existing });
+    });
 
+    app.get("/swap-requests", async (req, res) => {
+      const email = req.query.email;
 
-app.get("/requests/by-user/:email", async (req, res) => {
-  const email = req.params.email;
-  const offerId = req.query.offerId;
-  const existing = await requestsCollection.findOne({
-    offerId,
-    requesterEmail: email,
-  });
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
 
-  res.send({ requested: !!existing });
-});
+      const requests = await requestsCollection
+        .find({
+          $or: [{ senderEmail: email }, { receiverEmail: email }],
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
 
-app.get('/swap-requests', async (req, res) => {
-  const email = req.query.email;
+      res.send(requests);
+    });
 
-  if (!email) {
-    return res.status(400).send({ message: 'Email is required' });
-  }
+    app.patch("/swap-requests/:id", async (req, res) => {
+      const requestId = req.params.id;
+      const { status } = req.body;
 
-  const requests = await requestsCollection
-    .find({
-      $or: [
-        { senderEmail: email },
-        { receiverEmail: email }
-      ]
-    })
-    .sort({ createdAt: -1 })
-    .toArray();
+      const allowedStatuses = ["pending", "accepted", "rejected"];
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).send({ message: "Invalid status value" });
+      }
 
-  res.send(requests);
-});
+      const result = await requestsCollection.updateOne(
+        { _id: new ObjectId(requestId) },
+        { $set: { status } }
+      );
 
-app.patch('/swap-requests/:id', async (req, res) => {
-  const requestId = req.params.id;
-  const { status } = req.body;
+      res.send(result);
+    });
 
-  const allowedStatuses = ['pending', 'accepted', 'rejected'];
-  if (!allowedStatuses.includes(status)) {
-    return res.status(400).send({ message: 'Invalid status value' });
-  }
+    app.get("/swaps/active/:email", async (req, res) => {
+      const email = req.params.email;
+      const swaps = await requestsCollection
+        .find({
+          status: "accepted",
+          $or: [{ senderEmail: email }, { receiverEmail: email }],
+        })
+        .toArray();
+      res.send(swaps);
+    });
 
-  const result = await requestsCollection.updateOne(
-    { _id: new ObjectId(requestId) },
-    { $set: { status } }
-  );
+    app.get("/swaps/history/:email", async (req, res) => {
+      const email = req.params.email;
+      const history = await requestsCollection
+        .find({
+          status: "completed",
+          $or: [{ senderEmail: email }, { receiverEmail: email }],
+        })
+        .toArray();
+      res.send(history);
+    });
 
-  res.send(result);
-});
+    app.patch("/requests/complete/:id", async (req, res) => {
+      const id = req.params.id;
+      const request = await requestsCollection.findOne({
+        _id: new ObjectId(id),
+      });
 
-app.get("/swaps/active/:email", async (req, res) => {
-  const email = req.params.email;
-  const swaps = await requestsCollection.find({
-    status: "accepted",
-    $or: [{ senderEmail: email }, { receiverEmail: email }],
-  }).toArray();
-  res.send(swaps);
-});
+      const result = await requestsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "completed" } }
+      );
 
-app.get("/swaps/history/:email", async (req, res) => {
-  const email = req.params.email;
-  const history = await requestsCollection.find({
-    status: "completed",
-    $or: [{ senderEmail: email }, { receiverEmail: email }],
-  }).toArray();
-  res.send(history);
-});
+      await offersCollection.updateOne(
+        { _id: new ObjectId(request.offer._id) },
+        { $set: { completed: true } }
+      );
 
-app.patch("/requests/complete/:id", async (req, res) => {
-  const id = req.params.id;
-  const request = await requestsCollection.findOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
 
-  const result = await requestsCollection.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { status: "completed" } }
-  );
+    app.post("/feedback", async (req, res) => {
+      try {
+        const feedback = req.body;
 
-  await offersCollection.updateOne(
-    { _id: new ObjectId(request.offer._id) },
-    { $set: { completed: true } }
-  );
+        if (!feedback?.feedbackUser || !feedback?.message) {
+          return res.status(400).send({ error: "Missing required fields." });
+        }
 
-  res.send(result);
-});
+        feedback.createdAt = new Date();
 
+        const result = await feedbackCollection.insertOne(feedback);
+        res.send(result);
+      } catch (error) {
+        console.error("Error submitting feedback:", error);
+        res.status(500).send({ error: "Internal server error" });
+      }
+    });
 
-app.post("/feedback", async (req, res) => {
-  try {
-    const feedback = req.body;
+    app.get("/feedback/user/:email", async (req, res) => {
+      const email = req.params.email;
 
-    if (!feedback?.userEmail || !feedback?.message) {
-      return res.status(400).send({ error: "Missing required fields." });
-    }
+      try {
+        const feedbacks = await feedbackCollection
+          .find({ feedbackUser: email })
+          .sort({ createdAt: -1 }) 
+          .toArray();
 
-    feedback.createdAt = new Date();
+        res.send(feedbacks);
+      } catch (error) {
+        console.error("Error fetching feedbacks:", error);
+        res.status(500).send({ error: "Internal server error" });
+      }
+    });
 
-    const result = await feedbackCollection.insertOne(feedback);
-    res.send(result);
-  } catch (error) {
-    console.error("Error submitting feedback:", error);
-    res.status(500).send({ error: "Internal server error" });
-  }
-});
+    app.get("/users/connected/:email", async (req, res) => {
+      const email = req.params.email;
 
+      try {
+        const sentOffers = await requestsCollection
+          .find({ senderEmail: email })
+          .toArray();
+        const receivedOffers = await requestsCollection
+          .find({ receiverEmail: email })
+          .toArray();
 
+        const connectedEmails = new Set();
 
+        sentOffers.forEach((offer) => connectedEmails.add(offer.receiverEmail));
+        receivedOffers.forEach((offer) =>
+          connectedEmails.add(offer.senderEmail)
+        );
+
+        const connectedUsers = await usersCollection
+          .find({ email: { $in: [...connectedEmails] } })
+          .toArray();
+
+        res.send(connectedUsers);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch connected users" });
+      }
+    });
+
+    app.post("/messages", async (req, res) => {
+      const message = req.body;
+      message.timestamp = message.timestamp || new Date();
+
+      const result = await messagesCollection.insertOne(message);
+      res.send(result);
+    });
+
+    app.get("/messages/conversation", async (req, res) => {
+      const { user1, user2 } = req.query;
+
+      const conversation = await messagesCollection
+        .find({
+          $or: [
+            { senderEmail: user1, receiverEmail: user2 },
+            { senderEmail: user2, receiverEmail: user1 },
+          ],
+        })
+        .sort({ timestamp: 1 })
+        .toArray();
+
+      res.send(conversation);
+    });
+
+    app.get("/messages/inbox/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const conversations = await messagesCollection
+        .aggregate([
+          {
+            $match: {
+              $or: [{ senderEmail: email }, { receiverEmail: email }],
+            },
+          },
+          {
+            $sort: { timestamp: -1 },
+          },
+          {
+            $group: {
+              _id: {
+                participants: {
+                  $cond: [
+                    { $gt: ["$senderEmail", "$receiverEmail"] },
+                    { $concat: ["$receiverEmail", "_", "$senderEmail"] },
+                    { $concat: ["$senderEmail", "_", "$receiverEmail"] },
+                  ],
+                },
+              },
+              lastMessage: { $first: "$$ROOT" },
+            },
+          },
+        ])
+        .toArray();
+
+      res.send(conversations.map((c) => c.lastMessage));
+    });
+
+    app.delete("/messages/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await messagesCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+
+    app.delete("/messages/conversation", async (req, res) => {
+      const { user1, user2 } = req.query;
+
+      const result = await messagesCollection.deleteMany({
+        $or: [
+          { senderEmail: user1, receiverEmail: user2 },
+          { senderEmail: user2, receiverEmail: user1 },
+        ],
+      });
+
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
