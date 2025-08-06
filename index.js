@@ -147,6 +147,32 @@ const run = async () => {
       res.send(result);
     });
 
+app.get('/offers/made/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    const count = await offersCollection.countDocuments({ userEmail: email });
+
+    res.send({ count });
+  } catch (err) {
+    console.error('Error counting made offers:', err);
+    res.status(500).send({ message: 'Internal Server Error' });
+  }
+});
+
+// Backend: requests route
+app.get('/offers/received/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    const count = await requestsCollection.countDocuments({ receiverEmail: email });
+
+    res.send({ count });
+  } catch (err) {
+    console.error('Error counting received offers:', err);
+    res.status(500).send({ message: 'Internal Server Error' });
+  }
+});
+
+
     app.get("/offers-collection", async (req, res) => {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 6;
@@ -464,6 +490,11 @@ app.get('/feedbacks', async (req, res) => {
     res.status(500).send({ error: 'Failed to fetch analytics data' });
   }
 });
+
+app.get("/swaps", async (req, res) => {
+  const data = await requestsCollection.find().toArray();
+  res.status(201).send(data);
+})
 
     await client.db("admin").command({ ping: 1 });
     console.log(
