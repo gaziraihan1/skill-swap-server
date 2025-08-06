@@ -78,6 +78,15 @@ const run = async () => {
       res.send({ role: user.role });
     });
 
+    app.patch('/users/admin/:email', async (req, res) => {
+  const email = req.params.email;
+  const result = await usersCollection.updateOne(
+    { email },
+    { $set: { role: 'admin' } }
+  );
+  res.send(result);
+});
+
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
 
