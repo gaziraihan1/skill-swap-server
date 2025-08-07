@@ -16,7 +16,6 @@ The **SkillSwap Server** is the backend API service for the [SkillSwap](https://
 - **Framework:** Express.js
 - **Database:** MongoDB (Mongoose)
 - **Authentication:** Firebase Auth with JWT
-- **File Upload:** Cloudinary
 - **Deployment:** Vercel
 - **Security:** CORS, JWT
 
