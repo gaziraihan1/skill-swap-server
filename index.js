@@ -43,7 +43,6 @@ const verifyToken = async (req, res, next) => {
 
 const run = async () => {
   try {
-    await client.connect();
     const db = client.db("skillswap");
     const usersCollection = db.collection("users");
     const offersCollection = db.collection("offers");
@@ -113,7 +112,6 @@ const run = async () => {
         const result = await offersCollection.insertOne(offer);
         res.send(result);
       } catch (error) {
-        console.error("Error adding offer:", error);
         res.status(500).send({ error: "Failed to add offer" });
       }
     });
@@ -125,7 +123,6 @@ const run = async () => {
         const offers = await offersCollection.find(query).toArray();
         res.send(offers);
       } catch (error) {
-        console.error("Error fetching offers:", error);
         res.status(500).send({ error: "Failed to fetch offers" });
       }
     });
@@ -154,12 +151,10 @@ app.get('/offers/made/:email', async (req, res) => {
 
     res.send({ count });
   } catch (err) {
-    console.error('Error counting made offers:', err);
     res.status(500).send({ message: 'Internal Server Error' });
   }
 });
 
-// Backend: requests route
 app.get('/offers/received/:email', async (req, res) => {
   try {
     const email = req.params.email;
@@ -167,7 +162,6 @@ app.get('/offers/received/:email', async (req, res) => {
 
     res.send({ count });
   } catch (err) {
-    console.error('Error counting received offers:', err);
     res.status(500).send({ message: 'Internal Server Error' });
   }
 });
@@ -315,7 +309,6 @@ app.get('/offers/received/:email', async (req, res) => {
         const result = await feedbackCollection.insertOne(feedback);
         res.send(result);
       } catch (error) {
-        console.error("Error submitting feedback:", error);
         res.status(500).send({ error: "Internal server error" });
       }
     });
@@ -353,7 +346,6 @@ app.get('/feedbacks', async (req, res) => {
 
         res.send(feedbacks);
       } catch (error) {
-        console.error("Error fetching feedbacks:", error);
         res.status(500).send({ error: "Internal server error" });
       }
     });
@@ -382,7 +374,6 @@ app.get('/feedbacks', async (req, res) => {
 
         res.send(connectedUsers);
       } catch (err) {
-        console.error(err);
         res.status(500).send({ error: "Failed to fetch connected users" });
       }
     });
@@ -486,7 +477,6 @@ app.get('/feedbacks', async (req, res) => {
       topSkills,
     });
   } catch (err) {
-    console.error('Analytics fetch failed:', err);
     res.status(500).send({ error: 'Failed to fetch analytics data' });
   }
 });
@@ -496,10 +486,7 @@ app.get("/swaps", async (req, res) => {
   res.status(201).send(data);
 })
 
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    
   } catch {
   } finally {
   }
